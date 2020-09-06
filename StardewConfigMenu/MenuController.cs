@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using Microsoft.Xna.Framework;
 using StardewModdingAPI;
 using StardewModdingAPI.Events;
@@ -13,19 +13,20 @@ namespace StardewConfigMenu {
 
 	public class MenuController: IConfigMenu {
 		public static int? PageIndex = null;
-		private IModHelper Helper;
-		private IMonitor Monitor;
+		private IModHelper MyHelper;
+		private IMonitor MyMonitor;
 		private event ModDidAddPackage ModDidAddPackage;
 
 		internal MenuController(IModHelper helper, IMonitor monitor) {
-			Helper = helper;
-			Monitor = monitor;
-			MenuEvents.MenuChanged += MenuOpened;
-			MenuEvents.MenuClosed += MenuClosed;
+			MyHelper = helper;
+			MyMonitor = monitor;
+			helper.Events.Display.MenuChanged += MenuOpened;
+			helper.Events.Display.MenuChanged += MenuClosed;
 		}
 
-		//internal SettingsPage page;
-		internal MenuTab Tab;
+
+	//internal SettingsPage page;
+	internal MenuTab Tab;
 		internal MenuPage Page;
 
 		internal List<IOptionsPackage> OptionPackageList = new List<IOptionsPackage>();
@@ -38,16 +39,19 @@ namespace StardewConfigMenu {
 				OptionPackageList.Remove(existingPackage);
 
 			OptionPackageList.Add(package);
-			Monitor.Log($"{package.ModManifest.Name} has added its mod options");
+			MyMonitor.Log($"{package.ModManifest.Name} has added its mod options");
 			ModDidAddPackage?.Invoke(package);
 		}
 
 		/// <summary>
 		/// Removes the delegates that handle the button click and draw method of the tab
 		/// </summary>
-		private void MenuClosed(object sender, EventArgsClickableMenuClosed e) {
-			GraphicsEvents.OnPostRenderGuiEvent -= RenderTab;
-			GraphicsEvents.OnPreRenderGuiEvent -= HandleJunimo;
+		private void MenuClosed(object sender, MenuChangedEventArgs e) {
+			//To do: merge the events into one structured with this conditional
+			if (!(e.NewMenu == null)) return;
+
+			MyHelper.Events.Display.RenderedActiveMenu -= RenderTab;
+			//MyHelper.Events.Display.RenderingActiveMenu -= HandleJunimo;
 
 			if (Tab != null) {
 				Tab.RemoveListeners();
@@ -55,8 +59,8 @@ namespace StardewConfigMenu {
 			}
 
 			if (Page != null) {
-				if (e.PriorMenu is GameMenu) {
-					List<IClickableMenu> pages = Helper.Reflection.GetField<List<IClickableMenu>>((e.PriorMenu as GameMenu), "pages").GetValue();
+				if (e.OldMenu is GameMenu) {
+					List<IClickableMenu> pages = MyHelper.Reflection.GetField<List<IClickableMenu>>((e.OldMenu as GameMenu), "pages").GetValue();
 					pages.Remove(Page);
 				}
 
@@ -69,10 +73,14 @@ namespace StardewConfigMenu {
 		/// <summary>
 		/// Attaches the delegates that handle the button click and draw method of the tab
 		/// </summary>
-		private void MenuOpened(object sender, EventArgsClickableMenuChanged e) {
+		private void MenuOpened(object sender, MenuChangedEventArgs e)
+		{
+			//To do: merge the events into one structured with this conditional
+			if (e.NewMenu == null) return;
+
 			// copied from MenuClosed
-			GraphicsEvents.OnPostRenderGuiEvent -= RenderTab;
-			GraphicsEvents.OnPreRenderGuiEvent -= HandleJunimo;
+			MyHelper.Events.Display.RenderedActiveMenu -= RenderTab;
+			//MyHelper.Events.Display.RenderingActiveMenu -= HandleJunimo;
 
 			if (Tab != null) {
 				Tab.RemoveListeners();
@@ -81,8 +89,8 @@ namespace StardewConfigMenu {
 
 			if (Page != null) {
 
-				if (e.PriorMenu is GameMenu) {
-					List<IClickableMenu> oldpages = Helper.Reflection.GetField<List<IClickableMenu>>((e.PriorMenu as GameMenu), "pages").GetValue();
+				if (e.OldMenu is GameMenu) {
+					List<IClickableMenu> oldpages = MyHelper.Reflection.GetField<List<IClickableMenu>>((e.OldMenu as GameMenu), "pages").GetValue();
 					oldpages.Remove(Page);
 				}
 
@@ -99,7 +107,7 @@ namespace StardewConfigMenu {
 			}
 
 			GameMenu menu = (GameMenu) e.NewMenu;
-			List<IClickableMenu> pages = Helper.Reflection.GetField<List<IClickableMenu>>(menu, "pages").GetValue();
+			List<IClickableMenu> pages = MyHelper.Reflection.GetField<List<IClickableMenu>>(menu, "pages").GetValue();
 
 			var options = pages.Find(x => { return x is OptionsPage; });
 			int width = options.width;
@@ -108,38 +116,38 @@ namespace StardewConfigMenu {
 			PageIndex = pages.Count;
 			pages.Add(Page);
 
-			bool infoSuiteInstalled = Helper.ModRegistry.IsLoaded("Cdaragorn.UiInfoSuite");
+			bool infoSuiteInstalled = MyHelper.ModRegistry.IsLoaded("Cdaragorn.UiInfoSuite");
 			int tabLocation = infoSuiteInstalled ? 9 : 11;
-			Tab = new MenuTab(Helper, new Rectangle(menu.xPositionOnScreen + Game1.tileSize * tabLocation, menu.yPositionOnScreen + IClickableMenu.tabYPositionRelativeToMenuY + Game1.tileSize, Game1.tileSize, Game1.tileSize));
+			Tab = new MenuTab(MyHelper, new Rectangle(menu.xPositionOnScreen + Game1.tileSize * tabLocation, menu.yPositionOnScreen + IClickableMenu.tabYPositionRelativeToMenuY + Game1.tileSize, Game1.tileSize, Game1.tileSize));
 
-			GraphicsEvents.OnPostRenderGuiEvent -= RenderTab;
-			GraphicsEvents.OnPostRenderGuiEvent += RenderTab;
-			GraphicsEvents.OnPreRenderGuiEvent -= HandleJunimo;
-			GraphicsEvents.OnPreRenderGuiEvent += HandleJunimo;
+			MyHelper.Events.Display.RenderedActiveMenu -= RenderTab;
+			MyHelper.Events.Display.RenderedActiveMenu += RenderTab;
+			//MyHelper.Events.Display.RenderingActiveMenu -= HandleJunimo;
+			//MyHelper.Events.Display.RenderingActiveMenu += HandleJunimo;
 		}
 
 		private ClickableTextureComponent junimoNoteIconStorage;
 
-		private void HandleJunimo(object sender, EventArgs e) {
-			if (!(Game1.activeClickableMenu is GameMenu))
-				return;
+		//private void HandleJunimo(object sender, RenderingActiveMenuEventArgs e) {
+		//	if (!(Game1.activeClickableMenu is GameMenu))
+		//		return;
+		//
+		//	var gameMenu = Game1.activeClickableMenu as GameMenu;
+		//
+		//	// Remove Community Center Icon from Options, Exit Game, and Mod Options pages
+		//	if (gameMenu.currentTab == PageIndex || gameMenu.currentTab == 6 || gameMenu.currentTab == 7) {
+		//		if (gameMenu.junimoNoteIcon != null) {
+		//			junimoNoteIconStorage = gameMenu.junimoNoteIcon;
+		//			gameMenu.junimoNoteIcon = null;
+		//		}
+		//	} else if (junimoNoteIconStorage != null) {
+		//		gameMenu.junimoNoteIcon = junimoNoteIconStorage;
+		//		junimoNoteIconStorage = null;
+		//	}
+		//}
 
-			var gameMenu = Game1.activeClickableMenu as GameMenu;
 
-			// Remove Community Center Icon from Options, Exit Game, and Mod Options pages
-			if (gameMenu.currentTab == PageIndex || gameMenu.currentTab == 6 || gameMenu.currentTab == 7) {
-				if (gameMenu.junimoNoteIcon != null) {
-					junimoNoteIconStorage = gameMenu.junimoNoteIcon;
-					gameMenu.junimoNoteIcon = null;
-				}
-			} else if (junimoNoteIconStorage != null) {
-				gameMenu.junimoNoteIcon = junimoNoteIconStorage;
-				junimoNoteIconStorage = null;
-			}
-		}
-
-
-		private void RenderTab(object sender, EventArgs e) {
+		private void RenderTab(object sender, RenderedActiveMenuEventArgs e) {
 
 			if (!(Game1.activeClickableMenu is GameMenu))
 				return;
